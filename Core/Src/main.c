@@ -29,6 +29,7 @@
 #include "stdio.h"
 
 #include "retarget.h"
+#include "buffer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,6 +67,16 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if(htim == &htim6) {
     // todo: ADC的数值不稳定, 取均值
     printf("adc1 value: %04d", adc1_in13);
+  }
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart == &huart1) {
+    if (!UART_Buffer_isEmpty(&TX_BUF)) { // 发送缓冲区非空
+      DataBlocks_TypeDef *dblock = UART_Buffer_Pop(&TX_BUF);
+      HAL_UART_Transmit_IT(&huart1, dblock->start, dblock->size);
+    }
   }
 }
 /* USER CODE END 0 */
