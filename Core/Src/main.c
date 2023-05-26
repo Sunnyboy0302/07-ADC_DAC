@@ -27,6 +27,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
+#include "string.h"
 
 #include "retarget.h"
 #include "buffer.h"
@@ -39,7 +40,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define DMA_BUFFER_SIZE 8
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,7 +52,7 @@
 
 /* USER CODE BEGIN PV */
 // ADC1_IN13读数, 由DMA自动搬运
-uint16_t adc1_in13;
+uint16_t adc1_data[DMA_BUFFER_SIZE];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -65,8 +66,15 @@ void SystemClock_Config(void);
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if(htim == &htim6) {
-    // todo: ADC的数值不稳定, 取均值
-    printf("adc1 value: %04d", adc1_in13);
+    // 先copy出来, 防止DMA同时在修改数据
+    uint16_t tmp[DMA_BUFFER_SIZE];
+    memcpy(tmp, adc1_data, sizeof(uint16_t)*DMA_BUFFER_SIZE);
+    // 求和后取均值
+    uint16_t sum = 0;
+    for(int i = 0; i < DMA_BUFFER_SIZE; i++)
+      sum += tmp[i];
+    sum /= DMA_BUFFER_SIZE;
+    printf("adc1 value: %04d", sum);
   }
 }
 
@@ -118,7 +126,7 @@ int main(void)
   RetargetInit(&huart1);
   // HAL库中已经没有采样校准函数, HAL或许已经默认校准
   // 开启ADC的DMA模式
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&adc1_in13, 1);
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_data, 6);
   // 启用Tim6及其中断
   HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
