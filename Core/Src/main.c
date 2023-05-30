@@ -75,7 +75,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     for(int i = 0; i < DMA_BUFFER_SIZE; i++)
       sum += tmp[i];
     sum /= DMA_BUFFER_SIZE;
-    printf("adc1 value: %04d", sum);
+    printf("adc1 value: %04d, voltage: %.2f V", sum, 3.3*sum/4095);
   }
 }
 
@@ -92,7 +92,9 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 void ConvCpltCallback (ADC_HandleTypeDef * hadc)
 {
   if (hadc == &hadc1) {
-    HAL_DAC_Start_DMA(&hdac, DAC1_CHANNEL_1, (uint32_t *)adc1_data, DMA_BUFFER_SIZE, DAC_ALIGN_12B_R);
+    HAL_DAC_Start_DMA(&hdac, DAC1_CHANNEL_1,
+                      (uint32_t *)adc1_data, DMA_BUFFER_SIZE,
+                      DAC_ALIGN_12B_R);
   }
 }
 /* USER CODE END 0 */
@@ -135,7 +137,7 @@ int main(void)
   RetargetInit(&huart1);
   // HAL库中已经没有采样校准函数, HAL或许已经默认校准
   // 开启ADC的DMA模式
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_data, 6);
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_data, DMA_BUFFER_SIZE);
   // 启用Tim6及其中断
   HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
