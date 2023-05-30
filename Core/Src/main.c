@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
+#include "dac.h"
 #include "dma.h"
 #include "tim.h"
 #include "usart.h"
@@ -87,6 +88,13 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
     }
   }
 }
+
+void ConvCpltCallback (ADC_HandleTypeDef * hadc)
+{
+  if (hadc == &hadc1) {
+    HAL_DAC_Start_DMA(&hdac, DAC1_CHANNEL_1, (uint32_t *)adc1_data, DMA_BUFFER_SIZE, DAC_ALIGN_12B_R);
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -121,6 +129,7 @@ int main(void)
   MX_ADC1_Init();
   MX_USART1_UART_Init();
   MX_TIM6_Init();
+  MX_DAC_Init();
   /* USER CODE BEGIN 2 */
   // 将printf重定向到串口huart1
   RetargetInit(&huart1);
