@@ -28,7 +28,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
-#include "string.h"
 
 #include "retarget.h"
 #include "buffer.h"
@@ -53,8 +52,11 @@
 
 /* USER CODE BEGIN PV */
 // ADC1_IN13读数, 由DMA自动搬运
-uint16_t adc1_data[DMA_BUFFER_SIZE];
+uint16_t adc1_data[DMA_BUFFER_SIZE*2];
 uint16_t dac_data;
+
+uint8_t flag_cpl1 = 0;
+uint8_t flag_cpl2 = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -82,18 +84,17 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
   }
 }
 
+void HAL_ADC_ConvHalfCpltCallback (ADC_HandleTypeDef * hadc)
+{
+  if (hadc == &hadc1) {
+    flag_cpl1 = 1;
+  }
+}
+
 void ConvCpltCallback (ADC_HandleTypeDef * hadc)
 {
   if (hadc == &hadc1) {
-    // todo: copy的操作很耗时, 可使用双缓冲DMA代替
-    // 先copy出来, 防止DMA同时在修改数据
-    uint16_t tmp[DMA_BUFFER_SIZE];
-    memcpy(tmp, adc1_data, sizeof(uint16_t)*DMA_BUFFER_SIZE);
-    // 求和后取均值
-    dac_data = 0;
-    for(int i = 0; i < DMA_BUFFER_SIZE; i++)
-      dac_data += tmp[i];
-    dac_data /= DMA_BUFFER_SIZE;
+    flag_cpl2 = 1;
   }
 }
 /* USER CODE END 0 */
@@ -136,8 +137,7 @@ int main(void)
   RetargetInit(&huart1);
   // HAL库中已经没有采样校准函数, HAL或许已经默认校准
   // 开启ADC的DMA模式
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_data, DMA_BUFFER_SIZE);
-  // todo: 需要特意关闭半传输完成中断和错误中断吗?
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_data, DMA_BUFFER_SIZE*2);
   // 开启DAC的DMA模式
   HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *)&dac_data, 1, DAC_ALIGN_12B_R);
   // 启用Tim6及其中断
@@ -148,6 +148,16 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    // 将DMA buffer拆分成两个部分模拟双缓冲, 不在中断回调函数中进行复杂处理
+    if (flag_cpl1 || flag_cpl2 ) {
+      int start, sum = 0; // 初始化变量
+      if (flag_cpl1) start = 0;
+      else start = DMA_BUFFER_SIZE;
+      for (int i = 0; i < DMA_BUFFER_SIZE; i++)
+        sum += adc1_data[start + i];
+      dac_data = sum / DMA_BUFFER_SIZE;
+      flag_cpl1 = flag_cpl2 = 0;
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
