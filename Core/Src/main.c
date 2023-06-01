@@ -52,8 +52,9 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-// ADC1_IN13¶ÁÊı, ÓÉDMA×Ô¶¯°áÔË
+// ADC1_IN13è¯»æ•°, ç”±DMAè‡ªåŠ¨æ¬è¿
 uint16_t adc1_data[DMA_BUFFER_SIZE];
+uint16_t dac_data;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -67,22 +68,14 @@ void SystemClock_Config(void);
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if(htim == &htim6) {
-    // ÏÈcopy³öÀ´, ·ÀÖ¹DMAÍ¬Ê±ÔÚĞŞ¸ÄÊı¾İ
-    uint16_t tmp[DMA_BUFFER_SIZE];
-    memcpy(tmp, adc1_data, sizeof(uint16_t)*DMA_BUFFER_SIZE);
-    // ÇóºÍºóÈ¡¾ùÖµ
-    uint16_t sum = 0;
-    for(int i = 0; i < DMA_BUFFER_SIZE; i++)
-      sum += tmp[i];
-    sum /= DMA_BUFFER_SIZE;
-    printf("adc1 value: %04d, voltage: %.2f V", sum, 3.3*sum/4095);
+    printf("adc1 value: %04d, voltage: %.2f V", dac_data, 3.3*dac_data/4095);
   }
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart == &huart1) {
-    if (!UART_Buffer_isEmpty(&TX_BUF)) { // ·¢ËÍ»º³åÇø·Ç¿Õ
+    if (!UART_Buffer_isEmpty(&TX_BUF)) { // å‘é€ç¼“å†²åŒºéç©º
       DataBlocks_TypeDef *dblock = UART_Buffer_Pop(&TX_BUF);
       HAL_UART_Transmit_IT(&huart1, dblock->start, dblock->size);
     }
@@ -92,9 +85,15 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 void ConvCpltCallback (ADC_HandleTypeDef * hadc)
 {
   if (hadc == &hadc1) {
-    HAL_DAC_Start_DMA(&hdac, DAC1_CHANNEL_1,
-                      (uint32_t *)adc1_data, DMA_BUFFER_SIZE,
-                      DAC_ALIGN_12B_R);
+    // todo: copyçš„æ“ä½œå¾ˆè€—æ—¶, å¯ä½¿ç”¨åŒç¼“å†²DMAä»£æ›¿
+    // å…ˆcopyå‡ºæ¥, é˜²æ­¢DMAåŒæ—¶åœ¨ä¿®æ”¹æ•°æ®
+    uint16_t tmp[DMA_BUFFER_SIZE];
+    memcpy(tmp, adc1_data, sizeof(uint16_t)*DMA_BUFFER_SIZE);
+    // æ±‚å’Œåå–å‡å€¼
+    dac_data = 0;
+    for(int i = 0; i < DMA_BUFFER_SIZE; i++)
+      dac_data += tmp[i];
+    dac_data /= DMA_BUFFER_SIZE;
   }
 }
 /* USER CODE END 0 */
@@ -133,12 +132,15 @@ int main(void)
   MX_TIM6_Init();
   MX_DAC_Init();
   /* USER CODE BEGIN 2 */
-  // ½«printfÖØ¶¨Ïòµ½´®¿Úhuart1
+  // å°†printfé‡å®šå‘åˆ°ä¸²å£huart1
   RetargetInit(&huart1);
-  // HAL¿âÖĞÒÑ¾­Ã»ÓĞ²ÉÑùĞ£×¼º¯Êı, HAL»òĞíÒÑ¾­Ä¬ÈÏĞ£×¼
-  // ¿ªÆôADCµÄDMAÄ£Ê½
+  // HALåº“ä¸­å·²ç»æ²¡æœ‰é‡‡æ ·æ ¡å‡†å‡½æ•°, HALæˆ–è®¸å·²ç»é»˜è®¤æ ¡å‡†
+  // å¼€å¯ADCçš„DMAæ¨¡å¼
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_data, DMA_BUFFER_SIZE);
-  // ÆôÓÃTim6¼°ÆäÖĞ¶Ï
+  // todo: éœ€è¦ç‰¹æ„å…³é—­åŠä¼ è¾“å®Œæˆä¸­æ–­å’Œé”™è¯¯ä¸­æ–­å—?
+  // å¼€å¯DACçš„DMAæ¨¡å¼
+  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *)&dac_data, 1, DAC_ALIGN_12B_R);
+  // å¯ç”¨Tim6åŠå…¶ä¸­æ–­
   HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
 
@@ -146,7 +148,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    // some changes
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
