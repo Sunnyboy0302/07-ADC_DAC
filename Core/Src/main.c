@@ -91,7 +91,7 @@ void HAL_ADC_ConvHalfCpltCallback (ADC_HandleTypeDef * hadc)
   }
 }
 
-void ConvCpltCallback (ADC_HandleTypeDef * hadc)
+void HAL_ADC_ConvCpltCallback (ADC_HandleTypeDef * hadc)
 {
   if (hadc == &hadc1) {
     flag_cpl2 = 1;
