@@ -8,7 +8,7 @@ HAL_StatusTypeDef UART_Transmit_IT(UART_HandleTypeDef *huart, const uint8_t *pDa
 {
   if (huart->gState == HAL_UART_STATE_READY)
     return HAL_UART_Transmit_IT(huart, pData, Size);
-  else {// huart->gState == HAL_UART_STATE_BUSY
+  else { // huart->gState == HAL_UART_STATE_BUSY
     UART_Buffer_Push(buf, pData, Size);
     return HAL_OK;
   }
