@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
+#include "dac.h"
 #include "dma.h"
 #include "tim.h"
 #include "usart.h"
@@ -26,7 +27,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "stdio.h"
 
+#include "retarget.h"
+#include "buffer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -36,7 +40,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define DMA_BUFFER_SIZE 8
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -47,7 +51,12 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+// ADC1_IN13读数, 由DMA自动搬运
+uint16_t adc1_data[DMA_BUFFER_SIZE*2];
+uint16_t dac_data;
 
+uint8_t flag_cpl1 = 0;
+uint8_t flag_cpl2 = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -58,7 +67,36 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if(htim == &htim6) {
+    printf("adc1 value: %04d, voltage: %.2f V", dac_data, 3.3*dac_data/4095);
+  }
+}
 
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart == &huart1) {
+    if (!UART_Buffer_isEmpty(&TX_BUF)) { // 发送缓冲区非空
+      DataBlocks_TypeDef *dblock = UART_Buffer_Pop(&TX_BUF);
+      HAL_UART_Transmit_IT(&huart1, dblock->start, dblock->size);
+    }
+  }
+}
+
+void HAL_ADC_ConvHalfCpltCallback (ADC_HandleTypeDef * hadc)
+{
+  if (hadc == &hadc1) {
+    flag_cpl1 = 1;
+  }
+}
+
+void HAL_ADC_ConvCpltCallback (ADC_HandleTypeDef * hadc)
+{
+  if (hadc == &hadc1) {
+    flag_cpl2 = 1;
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -93,14 +131,33 @@ int main(void)
   MX_ADC1_Init();
   MX_USART1_UART_Init();
   MX_TIM6_Init();
+  MX_DAC_Init();
   /* USER CODE BEGIN 2 */
-
+  // 将printf重定向到串口huart1
+  RetargetInit(&huart1);
+  // HAL库中已经没有采样校准函数, HAL或许已经默认校准
+  // 开启ADC的DMA模式
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_data, DMA_BUFFER_SIZE*2);
+  // 开启DAC的DMA模式
+  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *)&dac_data, 1, DAC_ALIGN_12B_R);
+  // 启用Tim6及其中断
+  HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    // 将DMA buffer拆分成两个部分模拟双缓冲, 不在中断回调函数中进行复杂处理
+    if (flag_cpl1 || flag_cpl2 ) {
+      int start, sum = 0; // 初始化变量
+      if (flag_cpl1) start = 0;
+      else start = DMA_BUFFER_SIZE;
+      for (int i = 0; i < DMA_BUFFER_SIZE; i++)
+        sum += adc1_data[start + i];
+      dac_data = sum / DMA_BUFFER_SIZE;
+      flag_cpl1 = flag_cpl2 = 0;
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
